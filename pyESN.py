@@ -1,27 +1,4 @@
 import numpy as np
-import xarray as xr
-
-
-def combine_ERA5_data(city):
-    ds = xr.merge(
-        [xr.open_dataset(('D:\\Code\\Python\\'+city+str(i) +
-                         '.grib'), engine='cfgrib') for i in range(4)]
-    )
-    ds = ds.squeeze(drop=True)
-    tp = ds.tp.values.flatten()
-    time = ds.tp.coords['valid_time'].values.flatten()
-    data = xr.DataArray(tp, coords=[time], dims=['time'])
-    data = data.where(np.logical_not(data.isnull()), drop=True)
-    return data
-
-
-def gather_data(city):
-    raw = open("data\\"+city+".txt", "r").readlines()
-    data = np.array([float(line.split()[-1]) for line in raw[1:]])[-25400:]
-    data[data > 1000] = np.nan
-    data[np.isnan(data)] = np.nanmedian(data)
-    return data
-
 
 class ESN():
 
