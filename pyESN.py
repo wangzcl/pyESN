@@ -2,10 +2,10 @@ import numpy as np
 
 class ESN():
 
-    def __init__(self, n_inputs, n_outputs, n_reservoir=500,
+    def __init__(self, n_inputs: int, n_outputs: int, n_reservoir: int = 500,
                  input_scale=1, feedback_scale=1, spectral_radius=0.95,
-                 teacher_forcing=True, extend=True, sparsity=0,
-                 noise=0.001, bias=0.01, ridge=10**-10):
+                 teacher_forcing: bool = True, sparsity=0, noise=0.001,
+                 bias=0.01, ridge=10**-10, rng=np.random.default_rng()):
         """
         An implementation of Echo State Network.
         The specification of the network mainly follows Lu et al (2017), while
@@ -19,11 +19,11 @@ class ESN():
         :param feedback_scale: scale of feedback weights
         :param spectral_radius: spectral radius of the recurrent weight matrix
         :param teacher_forcing: whether to feed the output (teacher) back to the network
-        :param extend: whether to add inputs to network states in the regression
         :param sparsity: proportion of recurrent weights set to zero
         :param noise: scale of noise in the network dynamics
         :param bias: bias constant in activation function
         :param ridge: ridge regression parameter
+        :param rng: random generator
         """
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
@@ -32,12 +32,11 @@ class ESN():
         self.feedback_scale = feedback_scale
         self.spectral_radius = spectral_radius
         self.teacher_forcing = teacher_forcing
-        self.extend = extend
         self.sparsity = sparsity
         self.noise = noise
         self.bias = bias
         self.ridge = ridge
-        self.rng = np.random.default_rng()
+        self.rng = rng
 
         self._initweights()
 
@@ -83,18 +82,17 @@ class ESN():
         :param inputs: array of dimensions (steps * n_inputs)
         :param teacher: array of dimension (steps * n_outputs)
         """
-        steps = len(inputs)
         # detect and correct possible errors:
-        if len(teachers) != steps:
+        if len(teachers) != (steps := len(inputs)):
             raise ValueError("teacher and input do not match")
         if inputs.ndim < 2:
-            inputs = np.reshape(inputs, (steps, -1))
+            inputs = np.expand_dims(inputs, 1)
         if inputs.shape[1] != self.n_inputs:
             raise ValueError("incorrect input dimension")
         if teachers.ndim < 2:
-            teachers = np.reshape(teachers, (steps, -1))
+            teachers = np.expand_dims(teachers, 1)
         if teachers.shape[1] != self.n_outputs:
-            raise ValueError("incorrect output/teacher dimension")
+            raise ValueError("incorrect teacher dimension")
 
         # pre-allocate memory for network states:
         states = np.zeros((steps, self.n_reservoir))
@@ -106,9 +104,7 @@ class ESN():
         self.lastoutput = teachers[-1]
 
         # disregard the first few states:
-        transient = min(int(steps / 10), 100)
-        if self.extend:
-            states = np.hstack((states, inputs))
+        transient = min(int(steps / 10), 300)
         states = states[transient:]
         teachers = teachers[transient:]
         # learn the weights, i.e. solve output layer quantities W_out and c
@@ -117,11 +113,16 @@ class ESN():
         teachers_mean = np.mean(teachers, axis=0)
         states_delta = states-states_mean
         teachers_delta = teachers-teachers_mean
-        Id = np.eye(len(states_mean))
+        Id = np.eye(self.n_reservoir)
         self.W_out = teachers_delta.T.dot(states_delta).dot(
             np.linalg.inv((states_delta.T).dot(states_delta)+self.ridge*Id))
         self.c = teachers_mean-self.W_out.dot(states_mean)
+        self.measure_error(states, teachers)
         return
+
+    def measure_error(self, states, teachers):
+        outputs = np.squeeze(np.dot(states, self.W_out.T))+self.c
+        self.mse = np.mean((outputs-teachers)**2)
 
     def predict(self, inputs):
         """
@@ -133,7 +134,7 @@ class ESN():
         steps = len(inputs)
         # detect and correct possible errors:
         if inputs.ndim < 2:
-            inputs = np.reshape(inputs, (steps, -1))
+            inputs = np.expand_dims(inputs, 1)
         if inputs.shape[1] != self.n_inputs:
             raise ValueError("incorrect input dimension")
 
@@ -143,14 +144,9 @@ class ESN():
         state = self.laststate
 
         # let the network evolve according to inputs:
-        if self.extend:
-            for n in range(steps):
-                state = self._update(state, inputs[n], outputs[n])
-                outputs[n+1] = np.dot(self.W_out, np.concatenate(
-                    [state, inputs[n]]))+self.c
-        else:
-            for n in range(steps):
-                state = self._update(state, inputs[n], outputs[n])
-                outputs[n+1] = np.dot(self.W_out, state)+self.c
+        for n in range(steps):
+            state = self._update(state, inputs[n], outputs[n])
+            outputs[n+1] = np.dot(self.W_out, state)+self.c
 
         return outputs[1:]
+    
