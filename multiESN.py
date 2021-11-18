@@ -15,7 +15,7 @@ class multiESN():
         :param n_inputs: number of input dimensions
         :param n_outputs: number of output (teacher) dimensions
         :param input_scale: scale of input weights
-        :param feedback: scale of feedback weights
+        :param feedback: scale of feedback weights, please set it to be 0 for there is error
         :param spectral_radius: spectral radius of the recurrent weight matrix
         :param teacher_forcing: whether to feed the output (teacher) back to the network
         :param sparsity: proportion of recurrent weights set to zero
