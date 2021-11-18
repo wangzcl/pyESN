@@ -15,7 +15,7 @@ class multiESN():
         :param n_inputs: number of input dimensions
         :param n_outputs: number of output (teacher) dimensions
         :param input_scale: scale of input weights
-        :param feedback: scale of feedback weights, please set it to be 0 for there is error
+        :param feedback: scale of feedback weights
         :param spectral_radius: spectral radius of the recurrent weight matrix
         :param teacher_forcing: whether to feed the output (teacher) back to the network
         :param sparsity: proportion of recurrent weights set to zero
@@ -91,8 +91,7 @@ class multiESN():
         preactivation = (A @ current_state.unsqueeze(2)
                          ).squeeze_(2) + W_in @ input_pattern + self.bias
         if self.feedback:
-            preactivation += (W_feedb @
-                              teacher_pattern.unsqueeze(2)).squeeze_(2)
+            preactivation += (W_feedb @ teacher_pattern.unsqueeze_(-1)).squeeze_(-1)
         new_state = torch.tanh(preactivation)
         if self.noise:
             new_state += (2*self.noise) * (torch.rand(self.n_network,
